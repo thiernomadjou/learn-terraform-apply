@@ -9,6 +9,31 @@ provider "random" {}
 
 provider "time" {}
 
+# Data listing availability zones
+data "aws_availability_zones" "available" {}
+
+#Define the VPC 
+resource "aws_vpc" "vpc" {
+  cidr_block = var.vpc_cidr
+
+  tags = {
+    Name        = var.vpc_name
+    Environment = "demo_environment"
+    Terraform   = "true"
+  }
+}
+
+resource "aws_subnet" "private_subnet" {
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = cidrsubnet(var.vpc_cidr, 8, 1)
+  availability_zone = tolist(data.aws_availability_zones.available.names)[0]
+
+  tags = {
+    Name      = "private_subnet_1"
+    Terraform = "true"
+  }
+}
+
 data "aws_ami" "ubuntu" {
   most_recent = true
 
@@ -35,6 +60,8 @@ resource "aws_instance" "main" {
   ami           = data.aws_ami.ubuntu.id
   instance_type = "t2.micro"
 
+  subnet_id = aws_subnet.private_subnet.id
+
   tags = {
     Name  = "${random_pet.instance.id}-${count.index}"
     Owner = "${var.project_name}-tutorial"
@@ -46,4 +73,13 @@ resource "aws_s3_bucket" "example" {
     Name  = "Example Bucket"
     Owner = "${var.project_name}-tutorial"
   }
+}
+
+resource "aws_s3_object" "example" {
+  bucket = aws_s3_bucket.example.bucket
+
+  key    = "README.md"
+  source = "./README.md"
+
+  etag = filemd5("./README.md")
 }
